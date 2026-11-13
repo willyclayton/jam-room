@@ -65,10 +65,8 @@ export type RoomState = {
   status: string;
 };
 
+/** Actions on the guitar phone, handled by its local Conductor. */
 export type ClientMessage =
-  | { type: "hello"; name: string; role: Role }
-  | { type: "role"; role: Role }
-  | { type: "ping"; id: number; t0: number; rtt: number }
   | {
       type: "strum";
       /** Shared time the strum is heard on the guitar phone. */
@@ -83,15 +81,3 @@ export type ClientMessage =
   | { type: "follow"; follow: boolean }
   | { type: "start" }
   | { type: "stop" };
-
-export type ServerMessage =
-  | { type: "state"; state: RoomState; you: string }
-  | { type: "pong"; id: number; t0: number; ts: number }
-  | {
-      type: "strum";
-      at: number;
-      chord: string;
-      dir: "down" | "up";
-      strength: number;
-      from: string;
-    };

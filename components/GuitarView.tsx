@@ -123,7 +123,7 @@ export default function GuitarView({
   return (
     <main className="screen">
       {topbar}
-      <TempoStrip state={state} beat={beat} synced={conn.clock.synced} connected={conn.connected} />
+      <TempoStrip state={state} beat={beat} synced={conn.clock.synced} connected={conn.connected} error={conn.error} />
 
       <div className="styles" role="radiogroup" aria-label="Drum style">
         {STYLES.map((s) => (

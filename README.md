@@ -6,17 +6,18 @@ Phones join a room by link. One phone is the guitar, another is the drummer, and
 
 ```bash
 npm install
-npm run dev        # Next.js on :3000 and the PartyKit room server on :1999
+npm run dev        # http://localhost:3000. Rooms live in memory, no setup needed.
 ```
 
-Open http://localhost:3000 and start a jam. To use real phones, open `http://<your-computer's-LAN-IP>:3000` on phones on the same Wi-Fi. In dev the app finds the room server on the same host at port 1999.
+To use real phones, open `http://<your-computer's-LAN-IP>:3000` on phones on the same Wi-Fi.
 
 On a laptop you can play the guitar with the keyboard: keys **1–6** pick chords, **Space / ↓** strums down, **↑** strums up.
 
-## Deploy ($0)
+## Deploy (all on Vercel, $0)
 
-1. **Room server:** run `npx partykit deploy` (or `npm run deploy:party`). It prints a host like `jam-room.<you>.partykit.dev`.
-2. **App:** import the repo into Vercel and set `NEXT_PUBLIC_PARTYKIT_HOST` to that host.
+1. Push to `main`. Vercel builds it.
+2. In the Vercel project: **Storage → Create → Upstash for Redis** (free plan), and connect it to this project. This sets `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` names, which work too).
+3. Redeploy. Until storage is connected, the app shows a message saying so.
 
 ## How it plays
 
@@ -31,11 +32,14 @@ On a laptop you can play the guitar with the keyboard: keys **1–6** pick chord
 
 ## How sync works
 
-- Each phone measures its clock against the room server (ping/pong, keeping the fastest round trips), so all phones share one clock.
-- The server holds the beat grid as **segments** (`beat N is at time T, then BPM B`). Phones never get "play now". Every drum phone books 16th notes ~150 ms ahead on its audio clock from that grid. The output timestamp is used so sounds leave the speaker at the shared time.
-- Changes are booked at least 1 beat ahead (2 on slow connections). A booked change locks 250 ms + the worst round trip before it plays. Style and feel change on bar lines.
+- Everything runs on Vercel. Vercel can't hold live connections, so phones talk to one small API route over plain HTTP, and the room is kept in Upstash Redis.
+- **The guitar phone is the room's brain.** It runs the drummer logic (`Conductor`) locally, so strums never leave the phone. It uploads the room only when it changes (about once a beat while following).
+- **Other phones poll** every 200 ms while a guitar is in the room. Every poll is also a clock sample (NTP-style, keeping the fastest round trips), so all phones share the server's clock.
+- The room holds the beat grid as **segments** (`beat N is at time T, then BPM B`). Phones never get "play now". Each drum phone books 16th notes ~150 ms ahead on its audio clock from that grid, using the output timestamp so sounds leave the speaker at the shared time.
+- Changes are booked at least 1 beat ahead (2 on slow connections), and never closer than 250 ms + the polling interval + the worst round trip. Style and feel change on bar lines.
 - Drum patterns are deterministic (seeded per bar), so several drum phones play exactly the same thing.
 - The guitar timestamps each strum with when it's *heard* (now + output latency), so the drummer lines up with the sound and not with the touch.
+- If the guitar phone leaves (closed or asleep for ~15 s), the drum phones stop.
 
 ## Code map
 
@@ -45,8 +49,9 @@ On a laptop you can play the guitar with the keyboard: keys **1–6** pick chord
 | `lib/tempo.ts` | Count-in detection and the strum-to-grid line fit |
 | `lib/patterns.ts` | Drum patterns per style × feel, fills, endings |
 | `lib/transport.ts` | Beat ↔ time on the segment grid |
-| `party/server.ts` | PartyKit room: clock pings, players, relays strums, runs the conductor |
-| `lib/client/` | Clock sync and socket (`connection.ts`); Tone.js guitar, drum kit and scheduler (`audio.ts`) |
+| `app/api/room/[id]/route.ts` | Room API: poll the room (plus server time), publish it, presence heartbeat |
+| `lib/server/store.ts` | Upstash Redis in production, memory in local dev |
+| `lib/client/` | Clock sync, polling, and the guitar-hosted conductor (`connection.ts`); Tone.js guitar, drum kit and scheduler (`audio.ts`) |
 | `components/` | Role picker, guitar and drum screens, share (QR) and settings sheets |
 | `test/conductor.test.ts` | Simulated guitarists: steady, drifting, jumping, sloppy, many strum patterns |
 
@@ -55,7 +60,7 @@ Sounds are synthesised with Tone.js (plucked strings, synth drums), so there's n
 ## Tests
 
 ```bash
-npm test           # simulated jams: timing must stay within a few ms
+npm test           # simulated jams, including polling delays: timing must stay tight
 npm run typecheck
 ```
 

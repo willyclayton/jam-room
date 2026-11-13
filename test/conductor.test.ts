@@ -27,12 +27,13 @@ type Sim = {
  */
 function simulate(
   strums: number[],
-  opts: { latency?: number; rtt?: number; tail?: number; grid?: 1 | 2 } = {},
+  opts: { latency?: number; rtt?: number; tail?: number; grid?: 1 | 2; pollMs?: number } = {},
 ): Sim {
   const grid = opts.grid ?? 1;
   const latency = opts.latency ?? 40;
   const c = new Conductor();
   c.state.players = [{ id: "d", name: "drums", role: "drums", rtt: opts.rtt ?? 80 }];
+  c.pollMs = opts.pollMs ?? 0;
   const offsets: Sim["offsets"] = [];
   const bpmLog: Sim["bpmLog"] = [];
   // Snapshot of the grid as each drum phone would have scheduled it: once a
@@ -257,6 +258,8 @@ describe("strumming patterns and tempo changes (stress)", () => {
     };
   }
   /** Strums `pattern` (beat positions within a bar) over a plan of [bpm, bars]. */
+  // Runs as on Vercel: the guitar phone is the conductor (strums are stamped a
+  // little in the future: when they're heard), drum phones poll every 250 ms.
   function play(seed: number, jitter: number, pattern: number[], plan: [number, number][]) {
     const r = rnd(seed);
     const strums: number[] = [];
@@ -270,7 +273,7 @@ describe("strumming patterns and tempo changes (stress)", () => {
         for (const f of pattern) strums.push(t + f * beatMs(bpm) + (r() * 2 - 1) * jitter);
         t += 4 * beatMs(bpm);
       }
-    return simulate(strums, { latency: 30, rtt: 60, grid: 2 });
+    return simulate(strums, { latency: -15, rtt: 120, pollMs: 250, grid: 2 });
   }
   const patterns: Record<string, number[]> = {
     quarters: [0, 1, 2, 3],
@@ -289,7 +292,8 @@ describe("strumming patterns and tempo changes (stress)", () => {
           const { offsets } = play(seed, 15, pattern, p);
           const n = pattern.length; // the last bar (each tempo lasts 3+ bars)
           expect(meanAbs(offsets.slice(-n).map((o) => o.ms))).toBeLessThan(30);
-          expect(meanAbs(offsets.map((o) => o.ms))).toBeLessThan(45);
+          // Half notes give only 2 strums a bar to follow, so they trail longer.
+          expect(meanAbs(offsets.map((o) => o.ms))).toBeLessThan(pattern.length <= 2 ? 60 : 45);
         }
       });
 });

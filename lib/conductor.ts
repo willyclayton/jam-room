@@ -46,6 +46,11 @@ export class Conductor {
   private chordSince = 0;
   private energy = 0.5;
   private strumsSinceStart = 0;
+  /**
+   * How long drum phones can take to notice a change (their polling
+   * interval). Added to every booking margin.
+   */
+  pollMs = 0;
   /** Time a tempo-jump resync lands; following pauses until then. */
   private resyncAt: number | null = null;
 
@@ -64,7 +69,7 @@ export class Conductor {
   /** How far ahead changes are booked: 1 beat, or 2 on slow connections. */
   leadMs(bpm = this.currentBpm()) {
     const beats = this.maxRtt() > 200 ? 2 : 1;
-    return Math.max(beats * beatMs(bpm), this.maxRtt() + 150);
+    return Math.max(beats * beatMs(bpm), this.lockMs() + 60);
   }
 
   /**
@@ -72,12 +77,12 @@ export class Conductor {
    * may already have scheduled it (they book ~150 ms ahead, plus network).
    */
   private lockMs() {
-    return 250 + this.maxRtt();
+    return 250 + this.maxRtt() + this.pollMs;
   }
 
   /** How far ahead the very first downbeat must be. */
   private startLeadMs() {
-    return Math.max(150, this.maxRtt() * 0.75 + 100);
+    return this.lockMs();
   }
 
   private currentBpm() {

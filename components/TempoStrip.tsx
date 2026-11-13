@@ -16,14 +16,17 @@ export default function TempoStrip({
   beat,
   synced,
   connected,
+  error,
 }: {
   state: RoomState;
   beat: number | null;
   synced: boolean;
   connected: boolean;
+  error?: string | null;
 }) {
   let status = state.status;
-  if (!connected) status = "Connecting…";
+  if (error) status = error;
+  else if (!connected) status = "Connecting…";
   else if (!synced) status = "Syncing clocks…";
   else if (!state.players.some((p) => p.role === "drums")) status = state.transport.playing ? status : "Waiting for a drum phone";
   return (

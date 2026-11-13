@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import type { RoomConnection } from "@/lib/client/connection";
 import { STYLE_LABELS } from "@/lib/protocol";
 import { type AudioModule, useBeat, useRoom } from "./Room";
@@ -23,7 +23,6 @@ export default function DrumView({
   const state = useRoom(conn);
   const beat = useBeat(conn, delayMs);
   const scheduler = useMemo(() => new audio.DrumScheduler(new audio.DrumKit(), conn.clock), [audio, conn]);
-  const [chord, setChord] = useState<string | null>(null);
 
   useEffect(() => {
     scheduler.start();
@@ -35,13 +34,12 @@ export default function DrumView({
     scheduler.delayMs = delayMs;
   }, [scheduler, state, delayMs]);
 
-  useEffect(() => conn.onStrum((m) => setChord(m.chord)), [conn]);
-
   if (!state) return null;
   const t = state.transport;
   const seg = t.segments.length ? t.segments[t.segments.length - 1] : null;
   let status = state.status;
-  if (!conn.connected) status = "Connecting…";
+  if (conn.error) status = conn.error;
+  else if (!conn.connected) status = "Connecting…";
   else if (!conn.clock.synced) status = "Syncing clocks…";
   else if (!t.playing && !state.players.some((p) => p.role === "guitar")) status = "Waiting for a guitar phone";
   else if (!t.playing) status = state.follow ? "Waiting for the guitar to count in" : "Waiting for Start";
@@ -52,7 +50,7 @@ export default function DrumView({
       {!conn.connected && <div className="offline">Can’t reach the room. Retrying…</div>}
       <div className="stage">
         <div className="now-chord" aria-label="Current chord">
-          {chord ?? state.chord ?? "–"}
+          {state.chord ?? "–"}
         </div>
         <BeatDots beat={beat} />
         <div className="bpm">
