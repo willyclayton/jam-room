@@ -63,6 +63,10 @@ export type RoomState = {
   transport: Transport;
   /** Shown on screens, e.g. "Strum 4 times to count in". */
   status: string;
+  /** Auto-jam: the guitar phone strums the chord loop by itself. */
+  auto: boolean;
+  /** The chord loop, one chord per bar (see lib/auto.ts). */
+  progression: string[];
 };
 
 /** Actions on the guitar phone, handled by its local Conductor. */
@@ -80,4 +84,7 @@ export type ClientMessage =
   | { type: "bpm"; bpm: number }
   | { type: "follow"; follow: boolean }
   | { type: "start" }
-  | { type: "stop" };
+  | { type: "stop" }
+  | { type: "auto"; auto: boolean }
+  | { type: "progression"; progression: string[] }
+  | { type: "feel"; feel: Feel };

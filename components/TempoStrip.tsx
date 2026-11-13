@@ -28,7 +28,7 @@ export default function TempoStrip({
   if (error) status = error;
   else if (!connected) status = "Connecting…";
   else if (!synced) status = "Syncing clocks…";
-  else if (!state.players.some((p) => p.role === "drums")) status = state.transport.playing ? status : "Waiting for a drum phone";
+  else if (!state.auto && !state.players.some((p) => p.role === "drums")) status = state.transport.playing ? status : "Waiting for a drum phone";
   return (
     <>
       {!connected && <div className="offline">Can’t reach the room. Retrying…</div>}

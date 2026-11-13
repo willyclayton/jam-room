@@ -3,6 +3,8 @@
 import { useEffect, useMemo } from "react";
 import type { RoomConnection } from "@/lib/client/connection";
 import { STYLE_LABELS } from "@/lib/protocol";
+import { chordForBar } from "@/lib/auto";
+import type { ChordName } from "@/lib/chords";
 import { type AudioModule, useBeat, useRoom } from "./Room";
 import { BeatDots } from "./TempoStrip";
 
@@ -50,7 +52,9 @@ export default function DrumView({
       {!conn.connected && <div className="offline">Can’t reach the room. Retrying…</div>}
       <div className="stage">
         <div className="now-chord" aria-label="Current chord">
-          {state.chord ?? "–"}
+          {state.auto && t.playing && beat !== null && beat >= 0
+            ? chordForBar(state.progression as ChordName[], Math.floor(beat / 4))
+            : (state.chord ?? "–")}
         </div>
         <BeatDots beat={beat} />
         <div className="bpm">

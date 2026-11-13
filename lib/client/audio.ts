@@ -7,6 +7,7 @@ import * as Tone from "tone";
 import { VOICINGS, type ChordName } from "../chords";
 import type { Mark, Segment, Style, Transport } from "../protocol";
 import { barHits, SWING, type Drum, type Hit } from "../patterns";
+import { chordForBar, strumPattern } from "../auto";
 import { BEATS_PER_BAR, beatAtTime, segmentAtBeat, timeOfBeat } from "../transport";
 import type { ClockSync } from "./connection";
 
@@ -90,20 +91,24 @@ export class Guitar {
     }
   }
 
-  /** Strum a chord now. Harder = louder, tighter and brighter. */
-  strum(chord: ChordName, dir: "down" | "up", strength: number) {
+  /** Strum a chord now, or at audio time `at`. Harder = louder, tighter and brighter. */
+  strum(chord: ChordName, dir: "down" | "up", strength: number, at?: number) {
     const notes = VOICINGS[chord];
     const s = Math.max(0.05, Math.min(1, strength));
     const spread = 0.028 - s * 0.02; // seconds between strings
-    const t0 = Tone.now() + 0.005;
+    const t0 = at ?? Tone.now() + 0.005;
     let order = notes.map((n, i) => ({ n, i })).filter((x) => x.n !== null);
     if (dir === "up") order = order.reverse().slice(0, 4); // upstrokes catch the top strings
     order.forEach(({ n, i }, k) => {
       const t = t0 + k * spread;
       const str = this.strings[i];
       const vel = (0.35 + s * 0.65) * (dir === "up" ? 0.8 : 1);
-      str.gain.gain.setValueAtTime(vel, t);
-      str.synth.triggerAttack(Tone.Frequency(n!, "midi").toFrequency(), t);
+      try {
+        str.gain.gain.setValueAtTime(vel, t);
+        str.synth.triggerAttack(Tone.Frequency(n!, "midi").toFrequency(), t);
+      } catch {
+        // A string refuses a start time before its last one; skip that string.
+      }
     });
   }
 
@@ -305,6 +310,80 @@ export class DrumScheduler {
       this.cacheHits = dedupe(barHits({ bar, style: seg.style, feel: seg.feel, marks, endBeat }));
     }
     return this.cacheHits;
+  }
+}
+
+/**
+ * Auto-jam guitar: strums the room's chord loop on the shared grid, booked
+ * ~150 ms ahead like the drums, so it sits exactly in time with them.
+ */
+export class GuitarScheduler {
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private nextStep: number | null = null;
+  private epoch = -1;
+  room: { transport: Transport; progression: string[]; style: Style } | null = null;
+  delayMs = 0;
+  /** Called with the chord of each bar as it's booked (for the screen). */
+  onBar?: (bar: number, chord: string) => void;
+
+  constructor(
+    private guitar: Guitar,
+    private clock: ClockSync,
+  ) {}
+
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.tick(), 25);
+  }
+
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  private tick() {
+    const r = this.room;
+    const t = r?.transport;
+    if (!r || !t || !t.playing || !t.segments.length) {
+      this.nextStep = null;
+      return;
+    }
+    const segs = t.segments;
+    const now = this.clock.now();
+    const horizon = now + 150 + this.delayMs;
+    if (t.epoch !== this.epoch || this.nextStep === null) {
+      this.epoch = t.epoch;
+      const b = Math.max(0, beatAtTime(segs, now + this.delayMs));
+      this.nextStep = segs[0].time > now ? 0 : Math.ceil(b * 2);
+    }
+    for (let guard = 0; guard < 32; guard++) {
+      const step: number = this.nextStep!;
+      const beat = step / 2;
+      const shared = timeOfBeat(segs, beat);
+      if (shared > horizon) break;
+      // Ending: let the chord ring under the drum fill, then one last strum
+      // with the final crash. Nothing after that.
+      if (t.endBeat !== null && beat >= t.endBeat - 2) {
+        if (beat > t.endBeat) break;
+        this.nextStep = step + 1;
+        if (beat === t.endBeat && shared >= now - 30) {
+          const chord = chordForBar(r.progression as ChordName[], Math.floor(beat / BEATS_PER_BAR));
+          this.guitar.strum(chord, "down", 0.9, sharedToAudio(this.clock, shared, this.delayMs));
+        }
+        continue;
+      }
+      const bar = Math.floor(step / 8);
+      const inBar = step - bar * 8;
+      const seg = segmentAtBeat(segs, bar * BEATS_PER_BAR);
+      const chord = chordForBar(r.progression as ChordName[], bar);
+      if (inBar === 0) this.onBar?.(bar, chord);
+      for (const s of strumPattern(seg.style, seg.feel)) {
+        if (s.step !== inBar || shared < now - 30) continue;
+        this.guitar.strum(chord, s.dir, s.strength, sharedToAudio(this.clock, shared, this.delayMs));
+        debugHook()?.onStrum?.(shared);
+      }
+      this.nextStep = step + 1;
+    }
   }
 }
 

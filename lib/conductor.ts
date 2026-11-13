@@ -4,6 +4,7 @@
 import type { Feel, Mark, RoomState, Segment, Style } from "./protocol";
 import { beatAtTime, beatMs, BEATS_PER_BAR, emptyTransport, segmentAtTime, timeOfBeat } from "./transport";
 import { clampBpm, detectCountIn, fitGrid, foldBpm } from "./tempo";
+import { DEFAULT_PROGRESSION, isProgression } from "./auto";
 
 const DEFAULT_BPM = 100;
 /** Bars of silence before the drummer plays an ending. */
@@ -35,6 +36,8 @@ export function initialState(): RoomState {
     feel: 1,
     transport: emptyTransport(),
     status: "",
+    auto: false,
+    progression: [...DEFAULT_PROGRESSION],
   };
 }
 
@@ -166,6 +169,35 @@ export class Conductor {
 
   setBpm(now: number, bpm: number) {
     this.state.bpm = round1(clampBpm(bpm));
+    if (this.t.playing) this.commit(now, BEATS_PER_BAR);
+    return true;
+  }
+
+  /** Auto-jam on: drums start at the slider tempo and the guitar plays itself. */
+  setAuto(now: number, auto: boolean) {
+    if (auto === this.state.auto) return false;
+    this.state.auto = auto;
+    if (auto) {
+      this.state.follow = false;
+    } else {
+      this.stop(now);
+      this.state.follow = true;
+    }
+    this.updateStatus();
+    return true;
+  }
+
+  setProgression(progression: unknown) {
+    if (!isProgression(progression)) return false;
+    this.state.progression = [...progression];
+    return true;
+  }
+
+  /** Set the feel by hand (auto-jam has no strums to read it from). Lands on the next bar. */
+  setFeel(now: number, feel: Feel) {
+    if (feel !== 0 && feel !== 1 && feel !== 2) return false;
+    this.state.feel = feel;
+    this.energy = feel === 0 ? 0.15 : feel === 1 ? 0.5 : 0.85;
     if (this.t.playing) this.commit(now, BEATS_PER_BAR);
     return true;
   }
@@ -420,6 +452,11 @@ export class Conductor {
 
   private updateStatus() {
     const t = this.t;
+    if (this.state.auto) {
+      if (t.playing && t.endBeat !== null) this.state.status = "Ending…";
+      else this.state.status = t.playing ? "Auto jam: tap a bar, then a chord" : "Press Play to jam";
+      return;
+    }
     if (t.playing && t.endBeat !== null) this.state.status = "Ending…";
     else if (t.playing) this.state.status = this.state.follow ? "Following your strums" : "Drums on";
     else if (this.state.follow) this.state.status = "Strum 4 steady beats to count in";

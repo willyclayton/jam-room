@@ -19,7 +19,17 @@ On a laptop you can play the guitar with the keyboard: keys **1–6** pick chord
 2. In the Vercel project: **Storage → Create → Upstash for Redis** (free plan), and connect it to this project. This sets `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` names, which work too).
 3. Redeploy. Until storage is connected, the app shows a message saying so.
 
-## How it plays
+## Auto jam (the default)
+
+Pick **Guitar** and press **▶ Play**. The guitar strums a 4-bar chord loop by itself, in time with the drums. If no drum phone has joined, the same phone plays the drums too, so one phone is a whole band.
+
+- **Change the chords:** tap a bar (orange outline), then tap a chord. The next bar is selected for you, so you can enter a whole loop with 4 taps. The bar playing now has a teal underline.
+- **Presets:** Pop (G D Em C), Ballad (C G Am F), Sad (Am F C G), Folk (G C G D).
+- **Style and feel:** Rock / Funk / Bossa / Lo-fi, and Chill / Groove / Hard. Changes land on the next bar.
+- **Tempo:** the slider.
+- **I'll strum myself** switches to the strum pad below, where the drummer follows you. **Auto jam** switches back.
+
+## How it plays (strumming yourself)
 
 - **Count-in:** strum 4 steady beats. The drums come in on the next bar, with beat 1 on your first strum. You can also press **▶ Drums** to start at the slider tempo.
 - **Following:** the drummer fits a line through your recent strums. Small drifts are nudged on the next beat. A clear tempo jump (4 steady strums more than 10% off) resyncs like a fresh count-in. Quarters, 8ths, mixed patterns like D‑DU‑UDU, and half notes all work.
@@ -48,11 +58,12 @@ On a laptop you can play the guitar with the keyboard: keys **1–6** pick chord
 | `lib/conductor.ts` | Drummer brain: count-in, tempo/phase following, resync, fills, endings. Pure logic. |
 | `lib/tempo.ts` | Count-in detection and the strum-to-grid line fit |
 | `lib/patterns.ts` | Drum patterns per style × feel, fills, endings |
+| `lib/auto.ts` | Auto-jam: chord presets, chord per bar, guitar strum patterns per style × feel |
 | `lib/transport.ts` | Beat ↔ time on the segment grid |
 | `app/api/room/[id]/route.ts` | Room API: poll the room (plus server time), publish it, presence heartbeat |
 | `lib/server/store.ts` | Upstash Redis in production, memory in local dev |
 | `lib/client/` | Clock sync, polling, and the guitar-hosted conductor (`connection.ts`); Tone.js guitar, drum kit and scheduler (`audio.ts`) |
-| `components/` | Role picker, guitar and drum screens, share (QR) and settings sheets |
+| `components/` | Role picker, auto-jam, strum and drum screens, share (QR) and settings sheets |
 | `test/conductor.test.ts` | Simulated guitarists: steady, drifting, jumping, sloppy, many strum patterns |
 
 Sounds are synthesised with Tone.js (plucked strings, synth drums), so there's nothing to download or license. Sampled instruments can be swapped in later behind the same `Guitar` and `DrumKit` classes.

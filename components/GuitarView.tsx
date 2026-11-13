@@ -182,6 +182,9 @@ export default function GuitarView({
         <button className="btn small" onClick={() => conn.send({ type: "bpm", bpm: state.bpm * 2 })} aria-label="Double tempo">
           2×
         </button>
+        <button className="btn small" onClick={() => conn.send({ type: "auto", auto: true })}>
+          Auto jam
+        </button>
         <div style={{ flex: 1 }} />
         {playing ? (
           <button className="btn small" onClick={() => conn.send({ type: "stop" })}>

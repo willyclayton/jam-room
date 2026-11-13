@@ -91,7 +91,10 @@ export class RoomConnection {
     this.role = role;
     if (role === "guitar" && !this.conductor) {
       // Pick up where the room is (e.g. after a reload) or start fresh.
-      const base = this.remote ? structuredClone(this.remote.state) : initialState();
+      // A new room starts in auto-jam: press Play and it plays itself.
+      const base = this.remote
+        ? structuredClone(this.remote.state)
+        : { ...initialState(), auto: true, follow: false };
       this.conductor = new Conductor(base);
       this.conductor.pollMs = POLL_MS;
       this.conductor.state.players = this.players;
@@ -133,6 +136,15 @@ export class RoomConnection {
         break;
       case "stop":
         changed = c.stop(now);
+        break;
+      case "auto":
+        changed = c.setAuto(now, msg.auto);
+        break;
+      case "progression":
+        changed = c.setProgression(msg.progression);
+        break;
+      case "feel":
+        changed = c.setFeel(now, msg.feel);
         break;
     }
     if (changed) this.publish();
@@ -193,7 +205,7 @@ export class RoomConnection {
 
   /** The room as published by the guitar, plus who's here. */
   private viewOfRemote(): RoomState {
-    const base = this.remote?.state ?? initialState();
+    const base = { ...initialState(), ...(this.remote?.state ?? {}) };
     const s = withPlayers(base, this.players);
     // Guitar phone gone (closed or asleep)? Stop the drums rather than play forever.
     if (s.transport.playing && !this.players.some((p) => p.role === "guitar")) {

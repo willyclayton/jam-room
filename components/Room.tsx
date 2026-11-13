@@ -5,6 +5,7 @@ import { RoomConnection } from "@/lib/client/connection";
 import type { Role } from "@/lib/protocol";
 import { beatAtTime } from "@/lib/transport";
 import GuitarView from "./GuitarView";
+import AutoJamView from "./AutoJamView";
 import DrumView from "./DrumView";
 import ShareSheet from "./ShareSheet";
 import SettingsSheet from "./SettingsSheet";
@@ -134,7 +135,7 @@ export default function Room({ id }: { id: string }) {
           >
             <span className="emoji">🎸</span>
             Guitar
-            <small>{counts.guitar ? "Someone’s on it" : "Chords + strum"}</small>
+            <small>{counts.guitar ? "Someone’s on it" : "Plays itself, you pick chords"}</small>
           </button>
           <button
             className={`role drums ${counts.drums ? "taken" : ""}`}
@@ -159,6 +160,8 @@ export default function Room({ id }: { id: string }) {
         <div style={{ flex: 1 }} />
       </main>
     );
+  } else if (role === "guitar" && state?.auto) {
+    body = <AutoJamView conn={conn} audio={audio} delayMs={delayMs} topbar={topbar} />;
   } else if (role === "guitar") {
     body = (
       <GuitarView conn={conn} audio={audio} delayMs={delayMs} topbar={topbar} onSwitch={() => setRole(null)} />
